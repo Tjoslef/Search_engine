@@ -51,11 +51,9 @@ int main(){
         std::cerr << "something went wrong in threads" << std::endl;
     }
     std::cout << "Search words " << std::endl;
-    std::string input;
-    if(input == "exit"){
-        abort();
-    }
-    std::getline(std::cin, input);
+    std::thread input(&search::Input,StartSearch);
+    std::thread realTimeCompilation(&search::realTime_search,StartSearch);
+
     std::cout << "Searching ...";
     std::vector<std::string> query = StartSearch.tokenizerInput(input);
     StartSearch.Matching(query);

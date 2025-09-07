@@ -31,7 +31,16 @@ class search {
         return running;
     }
     void setStatus(bool change){
-        finished = change;
+        start_search = change;
+    }
+    void updateResult(const std::string& res) {
+        std::lock_guard<std::mutex> lock(result_mutex);
+        latest_result = res;
+    }
+
+    std::string getResult() {
+        std::lock_guard<std::mutex> lock(result_mutex);
+        return latest_result;
     }
   const std::pair<std::vector<std::string>, std::unordered_map<int, std::set<std::pair<int,int>>>>&getIntersection(){
        return intersection_map;
@@ -51,8 +60,11 @@ class search {
                           const std::map<int, std::string>& id_to_file);
 
     void Debug(const std::pair<std::vector<std::string>, std::unordered_map<int, std::set<std::pair<int,int>>>>& map);
+    int Input();
+    int realTime_search();
+    void RealMatching(std::string input);
     private:
-  bool finished;
+  bool start_search;
   std::queue<std::string> search_queue;
   std::mutex queue_mutex;
   std::condition_variable queue_cv;
@@ -62,4 +74,6 @@ class search {
   std::pair<std::vector<std::string>, std::unordered_map<int, std::set<std::pair<int,int>>>>  result_union;
   std::unordered_map<std::string, std::vector<Posting>> inverted_map;
   std::mutex write_map;
+  std::string latest_result;
+  std::mutex result_mutex;
 };

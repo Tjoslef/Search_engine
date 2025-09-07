@@ -1,5 +1,6 @@
 #include "../include/search.hpp"
 #include <algorithm>
+#include <climits>
 #include <cmath>
 #include <cstddef>
 #include <cstdlib>
@@ -128,5 +129,17 @@ for (const auto& par : result_maps) {
            result_union.second.insert({file_id,lines});
        }
    }
-
+}
+void search::RealMatching(std::string input){
+    int big_dist = INT_MAX;
+    std::string big_name;
+    for (auto&[name,map]: inverted_map){
+    if (abs((int)input.size() - (int)name.size()) > 1) continue;
+    int lenght = levenshteinDistance(input, name);
+    if(lenght < big_dist){
+        big_dist = lenght;
+        big_name = name;
+        }
+    }
+    this->updateResult(big_name);
 }
