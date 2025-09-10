@@ -33,24 +33,35 @@ int levenshteinDistance(const std::string& s1, const std::string& s2) {
     return dp[n][m];
 }
 void search::Matching(std::vector<std::string> query){
-    std::vector<std::vector<Posting>> docID;
     std::vector<std::pair<std::string, std::unordered_map<int, std::set<std::pair<int,int>>>>> result_maps;
-
+    std::vector<std::pair<std::string, std::unordered_map<int, std::set<std::pair<int,int>>>>> result_mapsClose;
     for (auto& token : query) {
-        for (auto&[name,map]: inverted_map){
-        if (abs((int)token.size() - (int)name.size()) > 1) continue;
-        std::unordered_map<int, std::set<std::pair<int,int>>>file_to_lines;
-        int lenght = levenshteinDistance(token, name);
-        for (auto &post : map) {
-            if(lenght <= 2){
-                file_to_lines[post.file_id].insert(std::make_pair(post.line_number,post.position));
+        int best_dist = INT_MAX;
+        std::string best_name;
+        std::unordered_map<int, std::set<std::pair<int,int>>> best_file_to_lines;
+        for (auto& [name, map] : inverted_map) {
+            if (std::abs((int)token.size() - (int)name.size()) > 1)
+                continue;
+            int dist = levenshteinDistance(token, name);
+            if (dist <= 2) {
+                std::unordered_map<int, std::set<std::pair<int,int>>> file_to_lines;
+                for (auto& post : map) {
+                    file_to_lines[post.file_id].insert({post.line_number, post.position});
+                }
+                if (!file_to_lines.empty()) {
+                    result_maps.emplace_back(name, file_to_lines);
+                }
+                if (dist < best_dist && !file_to_lines.empty()) {
+                    best_dist = dist;
+                    best_name = name;
+                    best_file_to_lines = file_to_lines;
+                }
             }
         }
-        if (!file_to_lines.empty()) {
-            result_maps.emplace_back(name, std::move(file_to_lines));
+        if (!best_file_to_lines.empty()) {
+            result_mapsClose.emplace_back(best_name, best_file_to_lines);
         }
     }
-}
 for (const auto& par : result_maps) {
     std::cout << "Token: " << par.first << std::endl;
 
@@ -62,29 +73,90 @@ for (const auto& par : result_maps) {
         }
     }
 }
-   if(!result_maps.empty()){
-       intersection_map.second = result_maps[0].second;
-       intersection_map.first.push_back(result_maps[0].first);
-       for(int i = 1; i < result_maps.size(); ++i){
-           std::pair<std::vector<std::string>, std::unordered_map<int, std::set<std::pair<int,int>>>> temp;
-           for(auto& [file_id,lines_number] : intersection_map.second){
-               auto it = result_maps[i].second.find(file_id);
-               if(it != result_maps[i].second.end()){
+for (const auto& par : result_mapsClose) {
+    std::cout << "Token: " << par.first << std::endl;
+
+    for (const auto& [file_id, positions] : par.second) {
+        std::cout << "  File ID: " << file_id << std::endl;
+
+        for (const auto& [line, pos] : positions) {
+            std::cout << "    Line: " << line << "  Position: " << pos << std::endl;
+        }
+    }
+}
+if (!result_mapsClose.empty()) {
+    intersection_map.second = result_mapsClose[0].second;
+    intersection_map.first.push_back(result_mapsClose[0].first);
+
+    std::cout << "Initial intersection files for token '" << result_mapsClose[0].first << "': ";
+    for (const auto& [file_id, _] : intersection_map.second) {
+        std::cout << file_id << " ";
+    }
+    std::cout << std::endl;
+
+    for (int i = 1; i < result_mapsClose.size(); ++i) {
+        std::unordered_map<int, std::set<std::pair<int,int>>> temp_map;
+
+        std::cout << "Processing token '" << result_mapsClose[i].first << "' with files: ";
+        for (const auto& [file_id, _] : result_mapsClose[i].second) {
+            std::cout << file_id << " ";
+        }
+        std::cout << std::endl;
+
+        for (auto& [file_id, lines_number] : intersection_map.second) {
+            auto it = result_mapsClose[i].second.find(file_id);
+            if (it != result_mapsClose[i].second.end()) {
                 std::set<std::pair<int,int>> merged = lines_number;
-                  merged.insert(it->second.begin(), it->second.end());
-                  for(auto& ex_line : merged){
-                  std::cout << ex_line.first << std::endl;
-                  }
-                  temp.second[file_id] = std::move(merged);
-               }
-           }
-           temp.first = intersection_map.first;
-           temp.first.push_back(result_maps[i].first);
-           intersection_map = std::move(temp);
-        if (intersection_map.second.empty()) break;
-       }
+                merged.insert(it->second.begin(), it->second.end());
+                temp_map[file_id] = std::move(merged);
+
+                std::cout << "Keeping file " << file_id
+                          << " for token: " << result_mapsClose[i].first << std::endl;
+            } else {
+                std::cout << "Dropping file " << file_id
+                          << " - missing token: " << result_mapsClose[i].first << std::endl;
+            }
+        }
+
+        if (temp_map.empty()) {
+            std::cout << "No intersection found at token '" << result_mapsClose[i].first << "' - breaking." << std::endl;
+            intersection_map.second.clear();
+            break;
+        }
+
+        intersection_map.second = std::move(temp_map);
+        intersection_map.first.push_back(result_mapsClose[i].first);
+
+        std::cout << "Intersection files after processing token '" << result_mapsClose[i].first << "': ";
+        for (const auto& [file_id, _] : intersection_map.second) {
+            std::cout << file_id << " ";
+        }
+        std::cout << std::endl;
+
+        std::cout << "Tokens in intersection_map: ";
+        for (const auto& word : intersection_map.first) {
+            std::cout << word << " ";
+        }
+        std::cout << std::endl;
+    }
    }else {
        std::cout << "nothing in result_map" << std::endl;
+   }
+   if (intersection_map.second.empty() || intersection_map.first.empty()) {
+       std::cout << "Doesnt have intersection" << std::endl;
+   } else {
+       std::cout << "Intersection files and positions after the looking:" << std::endl;
+      int i = 0;
+       for (const auto& [file_id, lines] : intersection_map.second) {
+           std::cout << "File ID: " << file_id << std::endl;
+           std::cout << " Words: ";
+           for (const auto& word : intersection_map.first) {
+               std::cout << word << " ";
+           }
+           for (const auto& pos : lines) {
+               std::cout << "  Line: " << pos.first << " Pos: " << pos.second << std::endl;
+           }
+       }
    }
    for (const auto &[file_id,lines_number] : intersection_map.second) {
        std::vector<int> token_position;
@@ -108,7 +180,7 @@ for (const auto& par : result_maps) {
        int actual = (last + len_last) - first;
         if (expected == actual) {
             whole_sentece_map.second.insert({file_id,lines_number});
-            whole_sentece_map.first = std::move(intersection_map.first);
+            whole_sentece_map.first = intersection_map.first;
         }
    }
   std::pair<std::vector<std::string>, std::unordered_map<int, std::set<std::pair<int,int>>>> union_result;
@@ -130,16 +202,15 @@ for (const auto& par : result_maps) {
        }
    }
 }
-void search::RealMatching(std::string input){
+void search::completionCallback(const char* prefix, linenoiseCompletions* lc){
+    std::string input = prefix;
     int big_dist = INT_MAX;
     std::string big_name;
     for (auto&[name,map]: inverted_map){
     if (abs((int)input.size() - (int)name.size()) > 1) continue;
-    int lenght = levenshteinDistance(input, name);
-    if(lenght < big_dist){
-        big_dist = lenght;
-        big_name = name;
+    int length = levenshteinDistance(input, name);
+    if (length <= 2) {
+            linenoiseAddCompletion(lc, name.c_str());
         }
     }
-    this->updateResult(big_name);
 }

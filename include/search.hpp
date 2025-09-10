@@ -1,4 +1,5 @@
 #include <cstddef>
+#include "/home/tjoslef/Search engine/linenoise-ng/include/linenoise.h"
 #include <fstream>
 #include <functional>
 #include <iostream>
@@ -12,6 +13,8 @@
 #include <vector>
 #include <sqlite3.h>
 #include <future>
+#include <poppler/cpp/poppler-document.h>
+#include <poppler/cpp/poppler-page.h>
 struct Posting {
     int file_id;
     int line_number;
@@ -42,6 +45,7 @@ class search {
         std::lock_guard<std::mutex> lock(result_mutex);
         return latest_result;
     }
+    static std::unordered_map<std::string, std::vector<Posting>> inverted_map;
   const std::pair<std::vector<std::string>, std::unordered_map<int, std::set<std::pair<int,int>>>>&getIntersection(){
        return intersection_map;
    }
@@ -63,6 +67,7 @@ class search {
     int Input();
     int realTime_search();
     void RealMatching(std::string input);
+    static void completionCallback(const char* prefix, linenoiseCompletions* lc);
     private:
   bool start_search;
   std::queue<std::string> search_queue;
@@ -72,7 +77,6 @@ class search {
   std::pair<std::vector<std::string>, std::unordered_map<int, std::set<std::pair<int,int>>>>  intersection_map;
   std::pair<std::vector<std::string>, std::unordered_map<int, std::set<std::pair<int,int>>>>  whole_sentece_map;
   std::pair<std::vector<std::string>, std::unordered_map<int, std::set<std::pair<int,int>>>>  result_union;
-  std::unordered_map<std::string, std::vector<Posting>> inverted_map;
   std::mutex write_map;
   std::string latest_result;
   std::mutex result_mutex;

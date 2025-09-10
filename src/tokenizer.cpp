@@ -8,6 +8,18 @@
 #include <streambuf>
 #include <string>
 #include <vector>
+bool isTextFile(const std::string& filename) {
+    if (filename.size() < 4) return false; // ".txt" is 4 chars including the dot
+    std::string ext = filename.substr(filename.size() - 4);
+    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+    return ext == ".txt";
+}
+bool isPDF(const std::string& filename) {
+    if (filename.size() < 4) return false; // ".txt" is 4 chars including the dot
+    std::string ext = filename.substr(filename.size() - 4);
+    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+    return ext == ".pdf";
+}
 std::vector<Token> search::tokenizer(const std::string& input) {
     if (input.empty()) {
         std::cerr << "zero size string in tokenizer" << std::endl;
@@ -68,9 +80,11 @@ while (i < input.size()) {
 }
 return tokens;
 }
+std::unordered_map<std::string,std::vector<Posting>> search::inverted_map;
 void search::TokenizerFile(const std::string &filename, int id, std::promise<bool> resultFile) {
-    std::cout << "id from thread :" << id << std::endl;
     std::vector<Token> result;
+     std::string content ;
+    if (isTextFile(filename)) {
     std::ifstream myfile(filename);
     if (!myfile.is_open()) {
           std::cerr << "Failed to open " << filename << std::endl;
@@ -79,9 +93,33 @@ void search::TokenizerFile(const std::string &filename, int id, std::promise<boo
       }else {
           resultFile.set_value(true);
       }
+
     std::stringstream buffer;
     buffer << myfile.rdbuf();
-    std::string content = buffer.str();
+    content = buffer.str();
+    }else if (isPDF(filename)) {
+        std::unique_ptr<poppler::document> doc(
+            poppler::document::load_from_file(filename)
+        );
+        if (!doc) {
+            std::cerr << "Failed to open " << filename << std::endl;
+            resultFile.set_value(false);
+            return;
+        }else {
+            resultFile.set_value(true);
+        }
+        std::string result;
+        for (int i = 0; i < doc->pages(); ++i) {
+            std::unique_ptr<poppler::page> p(doc->create_page(i));
+            if (p) {
+                result += p->text().to_latin1();
+            }
+        }
+    }else {
+        std::cerr << "Failed to open " << filename << std::endl;
+        resultFile.set_value(false);
+        return;
+    }
     result = tokenizer(content);
     {
     std::lock_guard<std::mutex> lock(write_map);
@@ -95,23 +133,18 @@ void search::TokenizerFile(const std::string &filename, int id, std::promise<boo
     }
 }
 void search::printMap(const std::pair<std::vector<std::string>, std::unordered_map<int, std::set<std::pair<int,int>>>>& map,
-                      const std::map<int, std::string>& id_to_file) {
+                   const std::map<int, std::string>& id_to_file) {
     for (const auto& [file_id, lines] : map.second) {
         auto it = id_to_file.find(file_id);
         std::string filename = (it != id_to_file.end()) ? it->second : "<unknown>";
-
         std::cout << "File: " << filename << " (ID " << file_id << ")" << std::endl;
-        int posString = 0;
-        for (const auto&[line,pos] : lines) {
-            if(posString < map.first.size()){
-            std::string word = map.first[posString];
-            std::cout << " Word :" << word;
-            }else {
-                break;
-            }
-            std::cout << "  On line: " << line << std::endl;
-            posString++;
+        std::cout << " Words: ";
+        for (const auto& word : map.first) {
+            std::cout << word << " ";
         }
         std::cout << std::endl;
+        for (const auto& [line, pos] : lines) {
+            std::cout << "   Line: " << line << " Pos: " << pos << std::endl;
+        }
     }
-}
+   }
