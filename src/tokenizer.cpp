@@ -108,11 +108,11 @@ void search::TokenizerFile(const std::string &filename, int id, std::promise<boo
         }else {
             resultFile.set_value(true);
         }
-        std::string result;
+
         for (int i = 0; i < doc->pages(); ++i) {
             std::unique_ptr<poppler::page> p(doc->create_page(i));
             if (p) {
-                result += p->text().to_latin1();
+                content += p->text().to_latin1();
             }
         }
     }else {
